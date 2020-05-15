@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -53,6 +54,8 @@ func (a *App) CreatePost() http.Handler {
 		}
 		defer r.Body.Close()
 
+		uid, _ := uuid.NewV4()
+		post.Id = uid
 		err = db.Create(&post).Error
 		if err != nil {
 			log.Printf("create post error %v", err)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 type Broker struct {
@@ -28,8 +29,8 @@ type pgSetup struct {
 
 type Post struct {
 	Id        uuid.UUID `gorm:"type:uuid"`
-	Title     string
-	Content   string
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
