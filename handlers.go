@@ -50,7 +50,7 @@ func (a *App) CreatePost() http.Handler {
 		decoder.DisallowUnknownFields()
 		err := decoder.Decode(&post)
 		if err != nil {
-			JSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+			JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
 			return
 		}
 		defer r.Body.Close()
@@ -78,7 +78,7 @@ func (a *App) UpdatePost() http.Handler {
 		decoder.DisallowUnknownFields()
 		err := decoder.Decode(&newPost)
 		if err != nil {
-			JSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+			JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
 			return
 		}
 		defer r.Body.Close()
