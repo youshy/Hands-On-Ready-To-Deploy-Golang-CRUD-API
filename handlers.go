@@ -47,6 +47,7 @@ func (a *App) CreatePost() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var post Post
 		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
 		err := decoder.Decode(&post)
 		if err != nil {
 			JSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
@@ -74,6 +75,7 @@ func (a *App) UpdatePost() http.Handler {
 		var post Post
 		var newPost Post
 		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
 		err := decoder.Decode(&newPost)
 		if err != nil {
 			JSONResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
