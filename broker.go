@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -36,23 +35,6 @@ type Post struct {
 }
 
 func (b *Broker) InitializeBroker() error {
-	if b.postgresDBSetup.username == "" {
-		err := errors.New("Please set up username")
-		return err
-	}
-	if b.postgresDBSetup.password == "" {
-		err := errors.New("Please set up password")
-		return err
-	}
-	if b.postgresDBSetup.dbName == "" {
-		err := errors.New("Please set up dbName")
-		return err
-	}
-	if b.postgresDBSetup.dbHost == "" {
-		err := errors.New("Please set up dbHost")
-		return err
-	}
-
 	err := b.setPostgres()
 	if err != nil {
 		return err
