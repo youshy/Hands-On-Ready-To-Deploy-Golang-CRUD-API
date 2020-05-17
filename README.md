@@ -17,6 +17,7 @@ Quick and straight to the point - let's build a quick CRUD API using Go!
 * [Setup entrypoint](#entrypoint)
 * [Initial server](#initial-server)
 * [Broker](#broker)
+* [Update server](#update-server)
 * [Handlers](#handlers)
 * [More handlers](#more-handlers)
 * [Finish server](#finish-server)
@@ -39,6 +40,8 @@ Depending on your preference, you can either:
 * Get one of our ready-to-Go instances and code along
 
 This playground assumes that you know nothing about Go and will explain a lot of stuff to some detail - if you want to learn more, I recommend [A Tour of Go](https://tour.golang.org) and [The Go Programming Language](https://www.amazon.co.uk/Programming-Language-Addison-Wesley-Professional-Computing/dp/0134190440) by A. Donovan and B. Kernighan.
+
+What we'll do - we will build a simple, ready to deploy Go CRUD (Create-Read-Update-Delete) API that will deal with Posts. So, think about it as a small blogging backend!
 
 Let's go!
 
@@ -306,11 +309,300 @@ func init() {
 
 ## Initial server
 
+Ok, we've got the `main.go` file done. Let's move to `server.go` and create logic for `App{}`, `Initialize()` and `Run()`:
+
+**server.go**
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
+)
+
+type App struct {
+	Router *mux.Router
+	Broker Broker
+}
+
+func (a *App) Initialize() {
+
+}
+
+func (a *App) Run(addr string) {
+
+}
+```
+
+Some new things here:
+
+In import you can see `github.com/gorilla/mux` and `github.com/rs/cors` - that means that we'll use 3rd party library for some of our application.
+[Mux](https://github.com/gorilla/mux) is one of the nicest HTTP routers for Go with insanely good documentation. 
+[Cors](https://github.com/rs/cors) is a handler implementing `Cross Origin Resource Sharing W3 specification` - in short, this is what we need to give this API to our FrontEnd developers and to make the whole API more secure.
+
+Also, we have a definition of struct:
+
+**server.go**
+```go
+type App struct {
+  Router *mux.Router
+  Broker Broker
+}
+```
+
+**Structs** in Go are the way we deal with Object-Oriented code. It's not entirely the same way as we'd have in any other language - for example, Go doesn't have classes. Keyword `type` defines that whatever will follow, will be taken as type (this will make way more sense in the next chapter of our workshop).
+
+Our `App` struct has two fields - `Router` and `Broker`. Without getting too much into computer science theory, `Router` is of a type of `*mux.Router` which means it's a pointer to `Router` type in `mux` package. In other words - there's a `mux.Router` type somewhere in memory, and we want our `Router` to reference it.
+
+Second field is way easier - `Broker` will be of a type `Broker` which we'll define in a sec.
+
+Let's add some more code to `initialize()` and `run()`:
+
+**server.go**
+```go
+func (a *App) Initialize() {
+
+  router := mux.NewRouter()
+
+  prefix := "/api"
+
+  a.Router = router
+}
+
+func (a *App) Run(addr string) {
+  handler := cors.Default().Handler(a.Router)
+  log.Printf("Server is listening on %v", addr)
+  http.ListenAndServe(addr, handler)
+}
+```
+
+Now we can talk about that `func (a *App)` thing here. As I've said earlier, Go deals with OOP a bit different that other languages. Both `Initialize` and `Run` are methods of `App` struct. The `(a *App)` denotes, that these methods will use the memory from `App`. If we'd lose the `*`, then these methods would create a new copy of `App` every time we'd call them.
+
+In `Initialize()` now we have `router` which will hold all handlers for our api. We have `prefix` - this is my preference - which we could use for versioning later in our application. Heck, we could even export it as a environmental variable and have different versions per each docker container if we'd want to. Last, we assign `router` to `a.Router` - which is `Router` within `App` struct.
+
+In `Run` we've added full code for the API to run, we've defined default cors support ([cors](https://github.com/rs/cors) documentation defines what that is) and we call `http.ListenAndServe()` function to make the whole thing alive. 
+
 [^Top](#top)
 
 <a name="broker"/>
 
 ## Broker
+
+Probably you've been wondering "what is that Broker thingy?" - Broker is my way of defining logic required for DB connection. This `broker` is very much stripped-down version of the one I use as a package im my code.
+
+Without further ado, in `broker.go`:
+
+**broker.go**
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/gofrs/uuid"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
+)
+
+type Broker struct {
+	postgresDBSetup pgSetup
+	postgresDB      *gorm.DB
+}
+
+func NewBroker() Broker {
+	b := Broker{}
+	return b
+}
+
+type pgSetup struct {
+	username string
+	password string
+	dbName   string
+	dbHost   string
+}
+
+type Post struct {
+	Id        uuid.UUID `gorm:"type:uuid"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (b *Broker) InitializeBroker() error {
+	err := b.setPostgres()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Broker) GetPostgres() *gorm.DB {
+	return b.postgresDB
+}
+
+func (b *Broker) SetPostgresConfig(username, password, dbName, dbHost string) {
+	pgs := pgSetup{
+		username: username,
+		password: password,
+		dbName:   dbName,
+		dbHost:   dbHost,
+	}
+	b.postgresDBSetup = pgs
+}
+
+func (b *Broker) setPostgres() error {
+	dbUri := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable password=%s", b.postgresDBSetup.dbHost, b.postgresDBSetup.username, b.postgresDBSetup.dbName, b.postgresDBSetup.password)
+	conn, err := gorm.Open("postgres", dbUri)
+	if err != nil {
+		return err
+	}
+	b.postgresDB = conn
+	b.postgresDB.LogMode(true)
+	b.postgresDB.Debug().AutoMigrate(
+		&Post{},
+	)
+	return nil
+}
+```
+
+Break it apart:
+
+**broker.go**
+```go
+import (
+	"fmt"
+	"time"
+
+	"github.com/gofrs/uuid"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
+)
+
+type Broker struct {
+	postgresDBSetup pgSetup
+	postgresDB      *gorm.DB
+}
+
+func NewBroker() Broker {
+	b := Broker{}
+	return b
+}
+```
+
+There's a few interesting things here:
+
+* `_ "github.com/jinzhu/gorm/dialects/postgres"` is something called "import with blank identifier" (explained well [here](https://www.calhoun.io/why-we-import-sql-drivers-with-the-blank-identifier/)), that allows our code to understand the database dialect;
+* finally we can see how `Broker` type looks
+* there's `func NewBroker()` function that returns `Broker`. We could get away with calling in `server.go` something like:
+
+```go
+b := Broker{}
+```
+
+But in this case, I think, it makes it more readable. And if we'd have to do any setup for our broker, we can do it here.
+
+**broker.go**
+```go
+type Post struct {
+	Id        uuid.UUID `gorm:"type:uuid"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+```
+
+`Post` struct will be our main struct holding data for our posts. Few interesting things:
+
+* what's `uuid.UUID`? It's a type of `UUID` from the [uuid](https://github.com/gofrs/uuid) package, that will give us a [uuid v4](https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_4_(random)), which is a fully random identifier;
+* those `gorm:"type:uuid"` and `json:"title"` fields are helpers for the database to understand what's the type of the field and for Go JSON Marshal mechanism to know what's the name of the key in JSON payload.
+
+In **Structs** there's one thing you should be aware of - if keys of your type are capitalized, then they'll be exported/used to encode/decode to JSON. If we'd have something like:
+
+```go
+type Post struct {
+	Id        uuid.UUID `gorm:"type:uuid"`
+	title     string    `json:"title"`
+	content   string    `json:"content"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+```
+
+Then no matter however hard we've tried, Go won't decode/encode those fields.
+
+**broker.go**
+```go
+func (b *Broker) GetPostgres() *gorm.DB {
+	return b.postgresDB
+}
+```
+
+I like to have `b.postgresDB` as a small Get wrapper - we'll use this function a lot in our handlers code.
+
+**broker.go**
+```go
+func (b *Broker) setPostgres() error {
+	dbUri := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable password=%s", b.postgresDBSetup.dbHost, b.postgresDBSetup.username, b.postgresDBSetup.dbName, b.postgresDBSetup.password)
+	conn, err := gorm.Open("postgres", dbUri)
+	if err != nil {
+		return err
+	}
+	b.postgresDB = conn
+	b.postgresDB.LogMode(true)
+	b.postgresDB.Debug().AutoMigrate(
+		&Post{},
+	)
+	return nil
+}
+```
+
+And this is the meat and bones of our `broker`:
+
+* dbUri - again, my preference - we create a connection string to use with `gorm.Open`. That string holds all the values we need to connect to Postgres;
+* `b.postgresDB.LogMode(true)` - this line allows us to see the queries the engine makes to postgres
+
+```go
+b.postgresDB.Debug().AutoMigrate(
+  &Post{},
+)
+```
+
+This is my favourite part of the broker - thanks to `AutoMigrate` function, we can migrate the schema automatically to postgres! Schema is created from `Post` struct, that's why we have `&Post{}`. `&` returns the address of a variable (again, pointers!) - without that, the engine would panic and break.
+
+Once we have `broker.go` done, let's go back to `server.go` and update everythign we need for connecting to the db.
+
+[^Top](#top)
+
+<a name="update-server"/>
+
+## Update server
+
+In `server.go` let's add:
+
+**server.go**
+```go
+a.Broker = NewBroker()
+PgUsername := os.Getenv("PG_USERNAME")
+PgPassword := os.Getenv("PG_PASSWORD")
+PgDbName := os.Getenv("PG_DB_NAME")
+PgDbHost := os.Getenv("PG_DB_HOST")
+a.Broker.SetPostgresConfig(PgUsername, PgPassword, PgDbName, PgDbHost)
+if err := a.Broker.InitializeBroker(); err != nil {
+  log.Fatalf("Error initializing postgres connection: %v", err)
+}
+```
+
+This will, again, create the broker, get all the necessary environmental variables and initialize the `broker`. If the process breaks, `log.Fatal` will print the exact error and then exit the application.
 
 [^Top](#top)
 
