@@ -33,7 +33,8 @@ func (a *App) Initialize() {
 	router.Handle(prefix+"/post", a.GetAllPost()).Methods(http.MethodGet)
 	router.Handle(prefix+"/post/{post_id}", a.GetSinglePost()).Methods(http.MethodGet)
 	router.Handle(prefix+"/post", a.CreatePost()).Methods(http.MethodPost)
-	router.Handle(prefix+"/post/{post_id}", a.UpdatePost()).Methods(http.MethodPut)
+	// TODO: add handler for updating post:
+
 	router.Handle(prefix+"/post/{post_id}", a.DeletePost()).Methods(http.MethodDelete)
 
 	log.Printf("Available routes:\n")

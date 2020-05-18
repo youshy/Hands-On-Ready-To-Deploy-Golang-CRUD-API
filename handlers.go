@@ -25,22 +25,7 @@ func (a *App) GetAllPost() http.Handler {
 	})
 }
 
-func (a *App) GetSinglePost() http.Handler {
-	db := a.Broker.GetPostgres()
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		var post Post
-		defer r.Body.Close()
-		err := db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
-		if err != nil {
-			log.Printf("get single post %v", err)
-			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			return
-		}
-
-		JSONResponse(w, http.StatusOK, post)
-	})
-}
+// TODO: create a method for GetSinglePost
 
 func (a *App) CreatePost() http.Handler {
 	db := a.Broker.GetPostgres()
