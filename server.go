@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -57,11 +56,4 @@ func (a *App) Run(addr string) {
 	handler := cors.Default().Handler(a.Router)
 	log.Printf("Server is listening on %v", addr)
 	http.ListenAndServe(addr, handler)
-}
-
-func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
-	response, _ := json.Marshal(output)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
 }
