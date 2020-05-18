@@ -140,6 +140,8 @@ That's all we have to do in our initial setup!
 
 Each Go application requires `main.go` file to run. `main.go` is our entrypoint for the app - whenever we'll run it or compile it, `main.go` has to have all the logic we need for the app to start. Let's write our first Go code!
 
+Create a file called `main.go` and add below:
+
 **main.go**
 ```go
 package main
@@ -309,7 +311,7 @@ func init() {
 
 ## Initial server
 
-Ok, we've got the `main.go` file done. Let's move to `server.go` and create logic for `App{}`, `Initialize()` and `Run()`:
+Ok, we've got the `main.go` file done. Let's move to a new file called `server.go` and create logic for `App{}`, `Initialize()` and `Run()`:
 
 **server.go**
 ```go
@@ -396,7 +398,7 @@ In `Run` we've added full code for the API to run, we've defined default cors su
 
 Probably you've been wondering "what is that Broker thingy?" - Broker is my way of defining logic required for DB connection. This `broker` is very much stripped-down version of the one I use as a package im my code.
 
-Without further ado, in `broker.go`:
+Without further ado, create a file `broker.go` and add below:
 
 **broker.go**
 ```go
@@ -579,7 +581,7 @@ b.postgresDB.Debug().AutoMigrate(
 
 This is my favourite part of the broker - thanks to `AutoMigrate` function, we can migrate the schema automatically to postgres! Schema is created from `Post` struct, that's why we have `&Post{}`. `&` returns the address of a variable (again, pointers!) - without that, the engine would panic and break.
 
-Once we have `broker.go` done, let's go back to `server.go` and update everythign we need for connecting to the db.
+Once we have `broker.go` done, let's go back to `server.go` and update everything we need for connecting to the db.
 
 [^Top](#top)
 
@@ -587,7 +589,7 @@ Once we have `broker.go` done, let's go back to `server.go` and update everythig
 
 ## Update server
 
-In `server.go` let's add:
+In `server.go`, just after `Initialize()` let's add:
 
 **server.go**
 ```go
@@ -604,17 +606,418 @@ if err := a.Broker.InitializeBroker(); err != nil {
 
 This will, again, create the broker, get all the necessary environmental variables and initialize the `broker`. If the process breaks, `log.Fatal` will print the exact error and then exit the application.
 
+After that, our `initialize()` function will look like this:
+
+**server.go**
+```go
+func (a *App) Initialize() {
+  a.Broker = NewBroker()
+  PgUsername := os.Getenv("PG_USERNAME")
+  PgPassword := os.Getenv("PG_PASSWORD")
+  PgDbName := os.Getenv("PG_DB_NAME")
+  PgDbHost := os.Getenv("PG_DB_HOST")
+  a.Broker.SetPostgresConfig(PgUsername, PgPassword, PgDbName, PgDbHost)
+  if err := a.Broker.InitializeBroker(); err != nil {
+    log.Fatalf("Error initializing postgres connection: %v", err)
+  }
+
+  router := mux.NewRouter()
+
+  prefix := "/api"
+
+  a.Router = router
+}
+```
+
+Pretty empty, isn't it? Let's recap what we have so far:
+
+* We have `main.go` that will be our entrypoint and will check for all environmental variables we might need
+* We have `server.go` that will deal with the server initialization and running
+* We have `broker.go` that will deal with database connection and schema migration
+
+Next step - handlers. Let's handle that! (Sorry, couldn't resist)
+
 [^Top](#top)
 
 <a name="handlers"/>
 
 ## Handlers
 
+Handler is a function, that will get something from our request, do some logic and then return some response to the client. So far, we've set up `router` and `prefix` for the routes. Let's add them.
+
+In `initialize()` let's define the handlers:
+
+**server.go**
+```go
+router.Handle(prefix+"/post", a.GetAllPost()).Methods(http.MethodGet)
+router.Handle(prefix+"/post/{post_id}", a.GetSinglePost()).Methods(http.MethodGet)
+router.Handle(prefix+"/post", a.CreatePost()).Methods(http.MethodPost)
+router.Handle(prefix+"/post/{post_id}", a.UpdatePost()).Methods(http.MethodPut)
+router.Handle(prefix+"/post/{post_id}", a.DeletePost()).Methods(http.MethodDelete)
+```
+
+Let's take apart one of these routes:
+
+```go
+router.Handle(prefix+"/post/{post_id}", a.GetSinglePost()).Methods(http.MethodGet)
+```
+
+* `router.Handle` - this is a method from `mux.NewRouter()` that allows us to register the handler
+* `(prefix+"/post/{post_id})` - we concatenate our `prefix` with the rest of the route. `{post_id}` will be the variable which we'll use in handler's logic.
+* `a.GetSinglePost()` - this will be the function we will write in next chapter. Take note on `a.` - if you remember, most of the functions so far use `App` struct to access variables across multiple components. We could get away without using that - then, we'd have to either establish connection to Postgres every time we want to use it (which is wasteful) or use global variables (which we don't want to do).
+* `Methods(http.MethodGet)` - this is the logic for our router that will denote which method was used for the request. As you can see, we also have `prefix+"/post/{post_id}"` for `UpdatePost()` and `DeletePost()` - we need a way to switch between these functions. `http.MethodGet` is a constant defined in `http` package which is simply a string `"GET"`
+
+We've got the basics, let's write the logic.
+
 [^Top](#top)
 
 <a name="more-handlers"/>
 
 ## More Handlers
+
+Create new file called `handlers.go` and let's scaffold our handlers:
+
+**handlers.go**
+```go
+package main
+
+import (
+  "encoding/json"
+  "log"
+  "net/http"
+
+  "github.com/gofrs/uuid"
+  "github.com/gorilla/mux"
+)
+
+func (a *App) GetAllPost() http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+  })
+}
+
+func (a *App) GetSinglePost() http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+  })
+}
+
+func (a *App) CreatePost() http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+  })
+}
+
+func (a *App) UpdatePost() http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+  })
+}
+
+func (a *App) DeletePost() http.Handler {
+  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+  })
+}
+```
+
+Some of you might go now: 
+
+"But why are you doing that? Why not do:
+
+```go
+func (a *App) GetAllPost(w http.ResponseWriter, r *http.Request) {
+
+}
+```
+And keep the logic simple?"
+
+What I'm using here is a **decorator pattern**. Later, when we'll add logic to the handlers, we can set up the database before the return of the function, which in a long run saves the resources and simplifies the logic a bit. Also helps us with refactoring the application once we'll be done with it.
+
+Before writing logic for the handlers, let's add one more function in `handlers.go`:
+
+**handlers.go**
+```go
+func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
+	response, _ := json.Marshal(output)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+```
+
+Another small preference of mine - with `JSONResponse` I can quickly set up the response from the API, marshal anything I need to JSON and return it to the client.
+
+For the sake of time, code for each function and the explanation for it is within next 5 paragraphs here:
+
+### GetAllPost
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    func (a *App) GetAllPost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        posts := make([]*Post, 0)
+        defer r.Body.Close()
+        err := db.Table("posts").Find(&posts).Error
+        if err != nil {
+          log.Printf("get all posts %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, posts)
+      })
+    }
+  ```
+
+</details>
+
+### GetSinglePost
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    func (a *App) GetSinglePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        var post Post
+        defer r.Body.Close()
+        err := db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+        if err != nil {
+          log.Printf("get single post %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, post)
+      })
+    }
+  ```
+  
+</details>
+
+### CreatePost
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    func (a *App) CreatePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var post Post
+        decoder := json.NewDecoder(r.Body)
+        decoder.DisallowUnknownFields()
+        err := decoder.Decode(&post)
+        if err != nil {
+          JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+          return
+        }
+        defer r.Body.Close()
+
+        uid, _ := uuid.NewV4()
+        post.Id = uid
+        err = db.Create(&post).Error
+        if err != nil {
+          log.Printf("create post error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusCreated, nil)
+      })
+    }
+  ```
+  
+</details>
+
+### UpdatePost
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    func (a *App) UpdatePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        var post Post
+        var newPost Post
+        decoder := json.NewDecoder(r.Body)
+        decoder.DisallowUnknownFields()
+        err := decoder.Decode(&newPost)
+        if err != nil {
+          JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+          return
+        }
+        defer r.Body.Close()
+
+        err = db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+        if err != nil {
+          log.Printf("update post fetch error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        post.Content = newPost.Content
+        db.Save(&post)
+        JSONResponse(w, http.StatusNoContent, nil)
+      })
+    }
+  ```
+  
+</details>
+
+### DeletePost
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    func (a *App) DeletePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        defer r.Body.Close()
+        err := db.Where("id = ?", vars["post_id"]).Delete(&Post{}).Error
+        if err != nil {
+          log.Printf("delete post etch error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, nil)
+      })
+    }
+  ```
+  
+</details>
+
+This is how the full file should look now:
+
+**handlers.go**
+```go
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+
+	"github.com/gofrs/uuid"
+	"github.com/gorilla/mux"
+)
+
+func (a *App) GetAllPost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts := make([]*Post, 0)
+		defer r.Body.Close()
+		err := db.Table("posts").Find(&posts).Error
+		if err != nil {
+			log.Printf("get all posts %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		JSONResponse(w, http.StatusOK, posts)
+	})
+}
+
+func (a *App) GetSinglePost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		var post Post
+		defer r.Body.Close()
+		err := db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+		if err != nil {
+			log.Printf("get single post %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		JSONResponse(w, http.StatusOK, post)
+	})
+}
+
+func (a *App) CreatePost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var post Post
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		err := decoder.Decode(&post)
+		if err != nil {
+			JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+			return
+		}
+		defer r.Body.Close()
+
+		uid, _ := uuid.NewV4()
+		post.Id = uid
+		err = db.Create(&post).Error
+		if err != nil {
+			log.Printf("create post error %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		JSONResponse(w, http.StatusCreated, nil)
+	})
+}
+
+func (a *App) UpdatePost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		var post Post
+		var newPost Post
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		err := decoder.Decode(&newPost)
+		if err != nil {
+			JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+			return
+		}
+		defer r.Body.Close()
+
+		err = db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+		if err != nil {
+			log.Printf("update post fetch error %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		post.Content = newPost.Content
+		db.Save(&post)
+		JSONResponse(w, http.StatusNoContent, nil)
+	})
+}
+
+func (a *App) DeletePost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		defer r.Body.Close()
+		err := db.Where("id = ?", vars["post_id"]).Delete(&Post{}).Error
+		if err != nil {
+			log.Printf("delete post etch error %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		JSONResponse(w, http.StatusOK, nil)
+	})
+}
+
+func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
+	response, _ := json.Marshal(output)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+```
 
 [^Top](#top)
 
