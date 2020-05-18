@@ -772,6 +772,34 @@ For the sake of time, code for each function and the explanation for it is withi
     }
   ```
 
+  This is where the decorator pattern shines - by keeping the `db` variable before `return`, it'll be initialized once until the application exits and reused by each call to `GetAllPost()`.
+
+  We initialize `post` variable which is a slice of `Post` - in other words, it's an array of objects of type `Post`.
+
+  `defer` is a keyword in Go, that means whenever the function exit, execute. In this case it closes the stream of `r.Body` - we could easily do nothing about it, but then it creates a problem with a memory leak from not closed stream.
+
+  `db.Table("posts").Find(&posts).Error` is a statement from `gorm` that allows us to query the database with chaining functions instead of writing the statements ourselves. Of course, if we'd need to do so, we can!
+
+  Then the last part is the most interesting one here:
+
+  ```go
+    if err != nil {
+      log.Printf("get all posts %v", err)
+      JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+      return
+    }
+  ```
+
+  If you remember the call to `JSONResponse` it took three arguments:
+  
+  * `w` of type ` http.ResponseWriter`
+  * `code` of type `int`
+  * `output` of type `interface{}`
+  
+  `interface{}` type in Go is a quite interesting one. In Layman's terms it's an in-built type that it kind of a wildcard - any type satisfies this interface, therefore it can be anything. That allows us to return `posts` in the last line as a JSON array and to return an error in `if err != nil` statement.
+
+  If you look at `map[string]interface{}` you can understand it as a key-value pair that has a key of type `string` and a value of type `interface`.
+
 </details>
 
 ### GetSinglePost
@@ -797,6 +825,8 @@ For the sake of time, code for each function and the explanation for it is withi
     }
   ```
   
+  The only difference from `GetAllPost` here is different variable to which we will write data - `var post Post` and different query to the database.
+
 </details>
 
 ### CreatePost
@@ -831,6 +861,28 @@ For the sake of time, code for each function and the explanation for it is withi
     }
   ```
   
+  Let's take out the interesting bits:
+
+  * `decoder` - as `CreatePost` will require a payload to create the post, we need to decode it somehow. Remember `Post` struct?
+  
+  ```go
+    type Post struct {
+      Id        uuid.UUID `gorm:"type:uuid"`
+      Title     string    `json:"title"`
+      Content   string    `json:"content"`
+      CreatedAt time.Time
+      UpdatedAt time.Time
+    }
+  ```
+
+  As we can see, this type will require `title` and `content` in the payload. So `decoder` will decode the JSON payload into Go type which we can use.
+
+  * `decoder.DisallowUnknownFields()` is a method that will return error if the payload contains any keys that we don't allow
+
+  * `uid, _ := uuid.NewV4()` - creates a new `UUID`
+
+  * `db.Create(&post).Error` - creates a new post in `posts` table - gorm is smart enough to know which struct is assigned to which table!
+
 </details>
 
 ### UpdatePost
@@ -866,6 +918,8 @@ For the sake of time, code for each function and the explanation for it is withi
       })
     }
   ```
+
+  Compared to `CreatePost` the only difference here is that we fetch the already existing post, change it's values from the payload and then save the updated one. Easy-peasy!
   
 </details>
 
@@ -890,6 +944,8 @@ For the sake of time, code for each function and the explanation for it is withi
       })
     }
   ```
+
+  Simplest one of all and the best moment to mention `vars := mux.Vars(r)`. In `DeletePost` handler we have `{post_id}` variable. This will be fetched by `mux.Vars()` and used in the query as `vars["post_id"]` to find the correct record in the database and delete it.
   
 </details>
 
@@ -1025,11 +1081,387 @@ func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
 
 ## Finish server
 
+We're almost there! One last thing left for us - another preference of mine - let's print out all the available routes in our app. In `server.go` in `Intialize()` add:
+
+**server.go**
+```go
+log.Printf("Available routes:\n")
+	router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		t, err := route.GetPathTemplate()
+		if err != nil {
+			return err
+		}
+		m, err := route.GetMethods()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\t%s\n", m, t)
+		return nil
+	})
+```
+
+This will print our routes in a nice fashion as Method - Path.
+
+If you need to cross-reference your code, take a peek into below paragraphs:
+
+## main.go
+
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    package main
+
+    import (
+      "log"
+      "os"
+    )
+
+    func main() {
+      a := App{}
+      a.Initialize()
+      a.Run(":9000")
+    }
+
+    func init() {
+      if ok := os.Getenv("PG_USERNAME"); ok == "" {
+        log.Fatalln("PG_USERNAME not specified")
+      }
+      if ok := os.Getenv("PG_PASSWORD"); ok == "" {
+        log.Fatalln("PG_PASSWORD not specified")
+      }
+      if ok := os.Getenv("PG_DB_NAME"); ok == "" {
+        log.Fatalln("PG_DB_NAME not specified")
+      }
+      if ok := os.Getenv("PG_DB_HOST"); ok == "" {
+        log.Fatalln("PG_DB_HOST_ not specified")
+      }
+    }
+  ```
+
+</details>
+
+## server.go
+
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    package main
+
+    import (
+      "fmt"
+      "log"
+      "net/http"
+      "os"
+
+      "github.com/gorilla/mux"
+      "github.com/rs/cors"
+    )
+
+    type App struct {
+      Router *mux.Router
+      Broker Broker
+    }
+
+    func (a *App) Initialize() {
+      a.Broker = NewBroker()
+      PgUsername := os.Getenv("PG_USERNAME")
+      PgPassword := os.Getenv("PG_PASSWORD")
+      PgDbName := os.Getenv("PG_DB_NAME")
+      PgDbHost := os.Getenv("PG_DB_HOST")
+      a.Broker.SetPostgresConfig(PgUsername, PgPassword, PgDbName, PgDbHost)
+      if err := a.Broker.InitializeBroker(); err != nil {
+        log.Fatalf("Error initializing postgres connection: %v", err)
+      }
+
+      router := mux.NewRouter()
+
+      prefix := "/api"
+
+      router.Handle(prefix+"/post", a.GetAllPost()).Methods(http.MethodGet)
+      router.Handle(prefix+"/post/{post_id}", a.GetSinglePost()).Methods(http.MethodGet)
+      router.Handle(prefix+"/post", a.CreatePost()).Methods(http.MethodPost)
+      router.Handle(prefix+"/post/{post_id}", a.UpdatePost()).Methods(http.MethodPut)
+      router.Handle(prefix+"/post/{post_id}", a.DeletePost()).Methods(http.MethodDelete)
+
+      log.Printf("Available routes:\n")
+      router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+        t, err := route.GetPathTemplate()
+        if err != nil {
+          return err
+        }
+        m, err := route.GetMethods()
+        if err != nil {
+          return err
+        }
+        fmt.Printf("%s\t%s\n", m, t)
+        return nil
+      })
+      a.Router = router
+    }
+
+    func (a *App) Run(addr string) {
+      handler := cors.Default().Handler(a.Router)
+      log.Printf("Server is listening on %v", addr)
+      http.ListenAndServe(addr, handler)
+    }
+  ```
+
+</details>
+
+## broker.go
+
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    package main
+
+    import (
+      "fmt"
+      "time"
+
+      "github.com/gofrs/uuid"
+      "github.com/jinzhu/gorm"
+      _ "github.com/jinzhu/gorm/dialects/postgres"
+    )
+
+    type Broker struct {
+      postgresDBSetup pgSetup
+      postgresDB      *gorm.DB
+    }
+
+    func NewBroker() Broker {
+      b := Broker{}
+      return b
+    }
+
+    type pgSetup struct {
+      username string
+      password string
+      dbName   string
+      dbHost   string
+    }
+
+    type Post struct {
+      Id        uuid.UUID `gorm:"type:uuid"`
+      Title     string    `json:"title"`
+      Content   string    `json:"content"`
+      CreatedAt time.Time
+      UpdatedAt time.Time
+    }
+
+    func (b *Broker) InitializeBroker() error {
+      err := b.setPostgres()
+      if err != nil {
+        return err
+      }
+
+      return nil
+    }
+
+    func (b *Broker) GetPostgres() *gorm.DB {
+      return b.postgresDB
+    }
+
+    func (b *Broker) SetPostgresConfig(username, password, dbName, dbHost string) {
+      pgs := pgSetup{
+        username: username,
+        password: password,
+        dbName:   dbName,
+        dbHost:   dbHost,
+      }
+      b.postgresDBSetup = pgs
+    }
+
+    func (b *Broker) setPostgres() error {
+      dbUri := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable password=%s", b.postgresDBSetup.dbHost, b.postgresDBSetup.username, b.postgresDBSetup.dbName, b.postgresDBSetup.password)
+      conn, err := gorm.Open("postgres", dbUri)
+      if err != nil {
+        return err
+      }
+      b.postgresDB = conn
+      b.postgresDB.LogMode(true)
+      b.postgresDB.Debug().AutoMigrate(
+        &Post{},
+      )
+      return nil
+    }
+  ```
+
+</details>
+
+## handlers.go
+
+<details>
+  <summary>Click to expand</summary>
+
+  ```go
+    package main
+
+    import (
+      "encoding/json"
+      "log"
+      "net/http"
+
+      "github.com/gofrs/uuid"
+      "github.com/gorilla/mux"
+    )
+
+    func (a *App) GetAllPost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        posts := make([]*Post, 0)
+        defer r.Body.Close()
+        err := db.Table("posts").Find(&posts).Error
+        if err != nil {
+          log.Printf("get all posts %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, posts)
+      })
+    }
+
+    func (a *App) GetSinglePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        var post Post
+        defer r.Body.Close()
+        err := db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+        if err != nil {
+          log.Printf("get single post %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, post)
+      })
+    }
+
+    func (a *App) CreatePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        var post Post
+        decoder := json.NewDecoder(r.Body)
+        decoder.DisallowUnknownFields()
+        err := decoder.Decode(&post)
+        if err != nil {
+          JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+          return
+        }
+        defer r.Body.Close()
+
+        uid, _ := uuid.NewV4()
+        post.Id = uid
+        err = db.Create(&post).Error
+        if err != nil {
+          log.Printf("create post error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusCreated, nil)
+      })
+    }
+
+    func (a *App) UpdatePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        var post Post
+        var newPost Post
+        decoder := json.NewDecoder(r.Body)
+        decoder.DisallowUnknownFields()
+        err := decoder.Decode(&newPost)
+        if err != nil {
+          JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
+          return
+        }
+        defer r.Body.Close()
+
+        err = db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+        if err != nil {
+          log.Printf("update post fetch error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        post.Content = newPost.Content
+        db.Save(&post)
+        JSONResponse(w, http.StatusNoContent, nil)
+      })
+    }
+
+    func (a *App) DeletePost() http.Handler {
+      db := a.Broker.GetPostgres()
+      return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        defer r.Body.Close()
+        err := db.Where("id = ?", vars["post_id"]).Delete(&Post{}).Error
+        if err != nil {
+          log.Printf("delete post etch error %v", err)
+          JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+          return
+        }
+
+        JSONResponse(w, http.StatusOK, nil)
+      })
+    }
+
+    func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
+      response, _ := json.Marshal(output)
+      w.Header().Set("Content-Type", "application/json")
+      w.WriteHeader(code)
+      w.Write(response)
+    }
+  ```
+
+</details>
+
 [^Top](#top)
 
 <a name="test-server"/>
 
 ## Test the server
+
+In the main directory of our app type `go run .`. This is what you should see:
+
+```
+2020/05/18 12:54:20 Available routes:
+[GET]	/api/post
+[GET]	/api/post/{post_id}
+[POST]	/api/post
+[PUT]	/api/post/{post_id}
+[DELETE]	/api/post/{post_id}
+2020/05/18 12:54:20 Server is listening on :9000
+```
+
+`go run .` is a command that compiles and runs the named main Go package. But let's kill the process (ctrl+C) and build the executable by typing `go build -o crud-api`. `-o` flag names the executable.
+
+So now, we can do `./crud-api` and we should get the same output!
+
+Now, let's run another terminal and test all the routes:
+
+(bear in mind - your id's will be way different than mine)
+
+### Get Posts
+`curl localhost:9000/api/post`
+
+### Get Single Post
+`curl localhost:9000/api/post/{id}`
+
+### Create New Post
+`curl -X POST -d '{"title":"my new post", "content": "such a good writer"}' localhost:9000/api/post`
+
+### Modify Post
+`curl -X PUT -d '{"content": "this is better"}' localhost:9000/api/post/{id}`
+
+### Delete Post
+`curl -X DELETE localhost:9000/api/post/{id}`
 
 [^Top](#top)
 
@@ -1037,16 +1469,46 @@ func JSONResponse(w http.ResponseWriter, code int, output interface{}) {
 
 ## Dockerfile
 
+I've promised we'll make the API deployable so let's add the dockerfile:
+
+```dockerfile
+FROM golang
+ENV GO111MODULE=on
+WORKDIR /app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+COPY . .
+RUN go build -o crud-api
+EXPOSE 9000
+ENTRYPOINT ["./crud-api"]
+```
+
 [^Top](#top)
 
 <a name="improve"/>
 
 ## How To Improve
 
+There's a few things to improve in our app:
+
+* The logic for DB actions could be abstracted from the handlers
+* Handlers could have more robust checks
+* There's no tests written for the API (apart from our simple `curl` commands)
+* Postgres might be abstracted into an interface - so we could quickly plug another database engine
+
+Of course there's more than this, but as an API written from ground up in a few hours I think it's better than ok!
+
 [^Top](#top)
 
 <a name="author"/>
 
 ## Word from the author
+
+Hope you've learned something about Go in the process and I was able to showcase the strengths and small quirks of writing in Go!
+
+If you have any questions or problems, catch me on [LinkedIn](https://www.linkedin.com/in/arturkondas/), [Twitter](https://twitter.com/arturkondas) or [Github](https://github.com/youshy)
+
+Read more about me, my stories and thoughts and find other Go tutorials @ [akondas.com](https://akondas.com)
 
 [^Top](#top)
