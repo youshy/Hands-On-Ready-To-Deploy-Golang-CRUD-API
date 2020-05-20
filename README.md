@@ -1496,6 +1496,7 @@ There's a few things to improve in our app:
 * Handlers could have more robust checks
 * There's no tests written for the API (apart from our simple `curl` commands)
 * Postgres might be abstracted into an interface - so we could quickly plug another database engine
+* Graceful shutdown
 
 Of course there's more than this, but as an API written from ground up in a few hours I think it's better than ok!
 
