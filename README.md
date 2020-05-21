@@ -108,7 +108,7 @@ For our app to work we need to initialize **Go Modules**. Go Modules is the way 
 In your terminal type:
 
 ```
-go modules init go-crud-api
+go mod init go-crud-api
 ```
 
 This will create new file `go.mod` in our folder. That's the last thing we'll have to do ANYTHING with our dependencies.
