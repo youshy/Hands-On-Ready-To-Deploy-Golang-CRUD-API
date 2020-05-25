@@ -158,4 +158,9 @@ func(e *Example) WillPrintUnexportedField() {
 t.WillPrintUnexportedField() // prints to stdout whatever the internals field value is
 ```
 
+## Run the app
+
+`go run .` - compiles and runs the app.
+
+`go build .` - compiles the app in the current dir and generates an executable.
 
