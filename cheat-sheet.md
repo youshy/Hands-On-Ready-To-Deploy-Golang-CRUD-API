@@ -2,26 +2,26 @@
 
 ## Save and/or quit
 
-`:q!` - quit without saving
-`:wq` - save and quit
-`:w` - just save
-`:q` - quit if saved
+* `:q!` - quit without saving
+* `:wq` - save and quit
+* `:w` - just save
+* `:q` - quit if saved
 
 ## Move around
 
 For the sake of our playground, we've enabled arrow keys in our Vim instances.
 If you want to be a pro:
 
-`h` - left
-`j` - down
-`k` - up
-`l` - right
+* `h` - left
+* `j` - down
+* `k` - up
+* `l` - right
 
 ## Modes
 
-`v` - visual mode, lets you highlight stuff
-`i` - insert mode, lets you input stuff
-`esc` - magic key, switches to normal mode where you can move around
+* `v` - visual mode, lets you highlight stuff
+* `i` - insert mode, lets you input stuff
+* `esc` - magic key, switches to normal mode where you can move around
 
 # Go
 
