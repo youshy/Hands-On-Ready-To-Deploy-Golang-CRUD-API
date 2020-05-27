@@ -6,6 +6,14 @@ Quick and straight to the point - let's build a quick CRUD API using Go!
 
 Cheat sheet -> [HERE](https://gist.github.com/youshy/a92020e228ef5a164a75be4733650ad7)
 
+---
+
+# DISCLAIMER
+
+If you're following our playground, switch to `diy` branch.
+
+---
+
 <a name="top">
 
 # Table Of Content
