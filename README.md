@@ -129,26 +129,20 @@ log.Fatalln("PG_PASSWORD not specified")
 
 [^Top](#top)
 
-<a name="initial-server"/>
-
-## Initial server
-
-
-
-[^Top](#top)
-
 <a name="handlers"/>
 
 ## Handlers
 
 Add the handler for updating posts:
 
+**server.go**
 ```go
 router.Handle(prefix+"/post/{post_id}", a.UpdatePost()).Methods(http.MethodPut)
 ```
 
 And let's write the logic for the handler as well:
 
+**handlers.go**
 ```go
   func (a *App) UpdatePost() http.Handler {
     db := a.Broker.GetPostgres()
