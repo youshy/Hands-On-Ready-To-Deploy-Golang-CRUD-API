@@ -144,33 +144,22 @@ And let's write the logic for the handler as well:
 
 **handlers.go**
 ```go
-  func (a *App) UpdatePost() http.Handler {
-    db := a.Broker.GetPostgres()
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-      vars := mux.Vars(r)
-      var post Post
-      var newPost Post
-      decoder := json.NewDecoder(r.Body)
-      decoder.DisallowUnknownFields()
-      err := decoder.Decode(&newPost)
-      if err != nil {
-        JSONResponse(w, http.StatusBadRequest, map[string]interface{}{"error": err.Error()})
-        return
-      }
-      defer r.Body.Close()
+func (a *App) GetSinglePost() http.Handler {
+	db := a.Broker.GetPostgres()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		var post Post
+		defer r.Body.Close()
+		err := db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
+		if err != nil {
+			log.Printf("get single post %v", err)
+			JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			return
+		}
 
-      err = db.Table("posts").Where("id = ?", vars["post_id"]).First(&post).Error
-      if err != nil {
-        log.Printf("update post fetch error %v", err)
-        JSONResponse(w, http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-        return
-      }
-
-      post.Content = newPost.Content
-      db.Save(&post)
-      JSONResponse(w, http.StatusNoContent, nil)
-    })
-  }
+		JSONResponse(w, http.StatusOK, post)
+	})
+}
 ```
 
 <a name="test-server"/>
