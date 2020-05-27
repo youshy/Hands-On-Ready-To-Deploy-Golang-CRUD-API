@@ -140,7 +140,7 @@ Add the handler for updating posts:
 router.Handle(prefix+"/post/{post_id}", a.UpdatePost()).Methods(http.MethodPut)
 ```
 
-And let's write the logic for the handler as well:
+And let's write the logic for the missing GetSinglePost handler well:
 
 **handlers.go**
 ```go
